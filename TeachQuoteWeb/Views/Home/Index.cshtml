@@ -1,0 +1,175 @@
+﻿<h2>網頁即時更新最新股價範例</h2>
+
+<div id="app">
+    <div class="row">
+        <div class="col-auto">
+            <label class="col-form-label">商品代碼 (群益)</label>
+        </div>
+        <div class="col-auto">
+            <input type="text" id="txtSymbol" class="form-control" v-model="queryForm.Symbol">
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary" v-on:click="RequestQuote()">訂閱報價</button>
+        </div>
+    </div>
+    <hr />
+    <h4>即時價格</h4>
+    <div class="row">
+        <div class="col-auto">
+            <label class="col-form-label">價格</label>
+        </div>
+        <div class="col-auto">
+            <input type="text" class="form-control" readonly="readonly" v-bind:value="Tick.Close">
+        </div>
+        <div class="col-auto">
+            <label class="col-form-label">單量</label>
+        </div>
+        <div class="col-auto">
+            <input type="text" class="form-control" readonly="readonly" v-bind:value="Tick.Qty">
+        </div>
+    </div>
+    <hr />
+    <h4>即時最佳五檔</h4>
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th scope="col" style="width: 25%">買價</th>
+                    <th scope="col" style="width: 25%">買量</th>
+                    <th scope="col" style="width: 25%">賣價</th>
+                    <th scope="col" style="width: 25%">賣量</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="table-danger">
+                    <th scope="row">{{Best5.Bid1Price}}</th>
+                    <td>{{Best5.Bid1Qty}}</td>
+                    <th scope="row">{{Best5.Ask1Price}}</th>
+                    <td>{{Best5.Ask1Qty}}</td>
+                </tr>
+                <tr>
+                    <td>{{Best5.Bid2Price}}</td>
+                    <td>{{Best5.Bid2Qty}}</td>
+                    <td>{{Best5.Ask2Price}}</td>
+                    <td>{{Best5.Ask2Qty}}</td>
+                </tr>
+                <tr>
+                    <td>{{Best5.Bid3Price}}</td>
+                    <td>{{Best5.Bid3Qty}}</td>
+                    <td>{{Best5.Ask3Price}}</td>
+                    <td>{{Best5.Ask3Qty}}</td>
+                </tr>
+                <tr>
+                    <td>{{Best5.Bid4Price}}</td>
+                    <td>{{Best5.Bid4Qty}}</td>
+                    <td>{{Best5.Ask4Price}}</td>
+                    <td>{{Best5.Ask4Qty}}</td>
+                </tr>
+                <tr>
+                    <td>{{Best5.Bid5Price}}</td>
+                    <td>{{Best5.Bid5Qty}}</td>
+                    <td>{{Best5.Ask5Price}}</td>
+                    <td>{{Best5.Ask5Qty}}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+@section scripts{
+    <script src="~/js/signalr/dist/browser/signalr.js"></script>
+    <script>
+        const app = Vue.createApp({
+            data() {
+                return {
+                    hub: {
+                        connection: {}
+                        , HubConnId: ''
+                    }
+                    , queryForm: {
+                        Symbol:'TX00'
+                    }
+                    , Tick: {
+                        Close: ''
+                        , Qty: ''
+                    }
+                    , Best5: {
+                        Bid1Price: ''
+                        , Bid1Qty: ''
+                        , Bid2Price: ''
+                        , Bid2Qty: ''
+                        , Bid3Price: ''
+                        , Bid3Qty: ''
+                        , Bid4Price: ''
+                        , Bid4Qty: ''
+                        , Bid5Price: ''
+                        , Bid5Qty: ''
+                    }
+                }
+            }
+            , created() {
+                var self = this;
+
+                self.hub.connection = new signalR.HubConnectionBuilder().withUrl("/quoteHub").build();
+
+                //與Server建立連線
+                self.hub.connection.start().then(function() {
+                    console.log("連線完成");
+                }).catch(function(err) {
+                    alert('連線錯誤: ' + err.toString());
+                });
+
+                // 連線ID
+                self.hub.connection.on("SetHubConnId", function(id) {
+                    self.hub.HubConnId = id;
+                });
+
+                // 顯示訊息事件
+                self.hub.connection.on("Alert", function(message) {
+                    alert(message);
+                });
+
+                // 更新報價
+                self.hub.connection.on("UpdTick", function(Symbol, close, qty) {
+                    self.Tick.Close = close;
+                    self.Tick.Qty = qty;
+                });
+
+                //更新Best5
+                self.hub.connection.on("UpdBest5", function(Symbol, jsonBest5) {
+                    var obj = JSON.parse(jsonBest5);
+                    self.Best5 = obj;
+                });
+
+            }
+            , methods: {
+                // 訂閱報價
+                RequestQuote() {
+                    var self = this;
+
+                    // 組合表單資料
+                    var postData = {};
+                    postData["HubConnId"] = self.hub.HubConnId;
+                    postData["Symbol"] = self.queryForm.Symbol;
+
+                    // 使用 jQuery Ajax 傳送至後端
+                    $.ajax({
+                        url: '@Url.Content("~/Home/RequestQuote")',
+                        method: 'POST',
+                        dataType: 'json',
+                        data: { inModel: postData, __RequestVerificationToken: $('@Html.AntiForgeryToken()').val() },
+                        success: function(datas) {
+                            if (datas.ErrMsg) {
+                                alert(datas.ErrMsg);
+                                return;
+                            }
+                        },
+                        error: function(err) {
+                            alert(err.status + " " + err.statusText + '\n' + err.responseText);
+                        }
+                    });
+                }
+            }
+        });
+        const vm = app.mount('#app');
+    </script>
+}
